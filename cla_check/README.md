@@ -9,17 +9,14 @@ username to the CONTRIBUTORS file in that repository.
 name: CLA Check
 
 on:
-    pull_request:
-        types: [opened, synchronize, reopened]
-    workflow_dispatch:
+    pull_request_target:
 
 jobs:
     cla_check:
         uses: MetOffice/growss/.github/workflows/cla-check.yaml@main
         secrets:
             gh_action_token: ${{ secrets.GITHUB_TOKEN }}
-
+        # Optional
         with:
-            # Optional
             runner: 'ubuntu-24.04'
 ```
