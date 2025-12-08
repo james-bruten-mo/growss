@@ -27,8 +27,8 @@ jobs:
         id: check_contributor_base
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
-          if [ -f "CONTRIBUTORS" ]; then
-            if grep -q "^$AUTHOR" CONTRIBUTORS; then
+          if [ -f "CONTRIBUTORS.md" ]; then
+            if grep -q "| $AUTHOR |" CONTRIBUTORS.md || grep -q "| $AUTHOR " CONTRIBUTORS.md; then
               echo "on_base=true" >> $GITHUB_OUTPUT
               echo "🎉 $AUTHOR has already signed the CLA on base branch."
             else
@@ -36,9 +36,9 @@ jobs:
               echo "⚠️ $AUTHOR not on base. Proceeding to check PR branch."
             fi
           else
-            # If CONTRIBUTORS file doesn't exist, we must check PR branch
+            # If CONTRIBUTORS.md file doesn't exist, we must check PR branch
             echo "on_base=undefined" >> $GITHUB_OUTPUT
-            echo "🔴 CONTRIBUTORS file does not exist on base. Proceeding to check PR branch."
+            echo "🔴 CONTRIBUTORS.md file does not exist on base. Proceeding to check PR branch."
           fi
 
       # --- Step 2: Check PR Branch ---
@@ -54,17 +54,17 @@ jobs:
         # Always check PR branch to detect if contributor removed themselves
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
-          if [ -f "CONTRIBUTORS" ]; then
-            if grep -q "^$AUTHOR" CONTRIBUTORS; then
+          if [ -f "CONTRIBUTORS.md" ]; then
+            if grep -q "| $AUTHOR |" CONTRIBUTORS.md || grep -q "| $AUTHOR " CONTRIBUTORS.md; then
               echo "on_pr=true" >> $GITHUB_OUTPUT
-              echo "✅ $AUTHOR is in the CONTRIBUTORS file on PR branch."
+              echo "✅ $AUTHOR is in the CONTRIBUTORS.md file on PR branch."
             else
               echo "on_pr=false" >> $GITHUB_OUTPUT
-              echo "⚠️ $AUTHOR is not in the CONTRIBUTORS file on PR branch."
+              echo "⚠️ $AUTHOR is not in the CONTRIBUTORS.md file on PR branch."
             fi
           else
             echo "on_pr=undefined" >> $GITHUB_OUTPUT
-            echo "🔴 CONTRIBUTORS file does not exist on PR branch."
+            echo "🔴 CONTRIBUTORS.md file does not exist on PR branch."
           fi
 
       # --- Step 3: Manage PR Labels, Comments, and Final Status (Consolidated) ---
@@ -158,7 +158,7 @@ jobs:
               await deleteOldClaComments();
 
               // Post warning comment
-              const commentBody = `⚠️ Hello @${author}!\n\nYour CLA signature was found on the base branch, but you appear to have removed yourself from the _CONTRIBUTORS_ file in this PR.\n\nPlease ensure your entry remains in the _CONTRIBUTORS_ file. If you have already signed the CLA, you should not remove your details from the file.`;
+              const commentBody = `⚠️ Hello @${author}!\n\nYour CLA signature was found on the base branch, but you appear to have removed yourself from the _CONTRIBUTORS.md_ file in this PR.\n\nPlease ensure your entry remains in the _CONTRIBUTORS.md_ file. If you have already signed the CLA, you should not remove your details from the file.`;
 
               await github.rest.issues.createComment({ owner, repo, issue_number, body: commentBody });
 
@@ -202,11 +202,11 @@ jobs:
               await deleteOldClaComments();
 
               // Post CLA comment
-              const commentBody = `Hello @${author}! 👋\n\nThank you for your contribution. Since this is your first time contributing to this repository, we ask that you sign our Contributor Licence Agreement (CLA).\n\n📄 [You can read the CLA here](https://github.com/MetOffice/simulation-systems/blob/github_wps/Momentum-CLA.md).\n\nTo agree to the CLA, please add your details (**GitHub username**, real name, organisation, email, and date) to the _CONTRIBUTORS_ file (create one, if required) in the development branch for this PR. After signing the CLA, you won't need to do this again for future PRs.`;
+              const commentBody = `Hello @${author}! 👋\n\nThank you for your contribution. Since this is your first time contributing to this repository, we ask that you sign our Contributor Licence Agreement (CLA).\n\n📄 [You can read the CLA here](https://github.com/MetOffice/simulation-systems/blob/github_wps/Momentum-CLA.md).\n\nTo agree to the CLA, please add your details (**GitHub username**, real name, organisation, email, and date) to the _CONTRIBUTORS.md_ file (create one, if required) in the development branch for this PR. After signing the CLA, you won't need to do this again for future PRs.`;
 
               await github.rest.issues.createComment({ owner, repo, issue_number, body: commentBody });
 
               // Fail the GitHub Action run
-              console.error("⚠️ Please add yourself to the CONTRIBUTORS file to sign the CLA.");
+              console.error("⚠️ Please add yourself to the CONTRIBUTORS.md file to sign the CLA.");
               process.exit(1);
             }
