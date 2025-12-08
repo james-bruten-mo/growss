@@ -23,7 +23,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.base.sha }}
 
-      - name: Determine if contributor exists in base
+      - name: Determine if contributor exists in base (new)
         id: check_contributor_base
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
