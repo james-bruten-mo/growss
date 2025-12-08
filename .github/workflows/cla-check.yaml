@@ -94,8 +94,12 @@ jobs:
                 console.log(`Updated label: ${name} with color ${color}`);
               } catch (error) {
                 // If update fails (label doesn't exist), create it
-                await github.rest.issues.createLabel({ owner, repo, name, color, description });
-                console.log(`Created new label: ${name} with color ${color}`);
+                try {
+                  await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                  console.log(`Created new label: ${name} with color ${color}`);
+                } catch (createError) {
+                  console.log(`Error with label ${name}:`, createError.message);
+                }
               }
             }
 
