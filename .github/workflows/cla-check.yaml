@@ -108,6 +108,37 @@ jobs:
             const COLOR_SIGNED = '0052cc'; // Blue
             const COLOR_REQUIRED = 'b60205'; // Red
 
+            // Helper function to delete old CLA-related comments from this bot
+            async function deleteOldClaComments() {
+              try {
+                const comments = await github.rest.issues.listComments({
+                  owner,
+                  repo,
+                  issue_number
+                });
+
+                // Filter comments from the bot that contain CLA-related content
+                const botComments = comments.data.filter(comment =>
+                  comment.user.type === 'Bot' &&
+                  (comment.body.includes('CLA') ||
+                   comment.body.includes('CONTRIBUTORS') ||
+                   comment.body.includes('Contributor Licence Agreement'))
+                );
+
+                // Delete all old CLA comments
+                for (const comment of botComments) {
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: comment.id
+                  });
+                  console.log(`Deleted old CLA comment #${comment.id}`);
+                }
+              } catch (error) {
+                console.log('Error deleting old comments:', error.message);
+              }
+            }
+
             console.log(`CLA Met: ${cla_met} (Base: ${signedOnBase}, PR: ${signedOnPr}, Removed: ${removedFromPr})`);
 
             // Handle case where contributor removed themselves from CONTRIBUTORS file
@@ -120,6 +151,9 @@ jobs:
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-required'] })
               ]);
+
+              // Delete old CLA comments before posting new one
+              await deleteOldClaComments();
 
               // Post warning comment
               const commentBody = `⚠️ Hello @${author}!\n\nYour CLA signature was found on the base branch, but you appear to have removed yourself from the _CONTRIBUTORS_ file in this PR.\n\nPlease ensure your entry remains in the _CONTRIBUTORS_ file. If you have already signed the CLA, you should not remove your details from the file.`;
@@ -149,6 +183,9 @@ jobs:
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-signed'] })
               ]);
 
+              // Delete old CLA comments since CLA is now signed
+              await deleteOldClaComments();
+
             } else {
               await ensureLabel('cla-required', COLOR_REQUIRED, 'CLA signature is required for this PR.');
               console.log('❌ CLA condition NOT met. Adding required label and ensuring signed label is absent.');
@@ -158,6 +195,9 @@ jobs:
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-required'] })
               ]);
+
+              // Delete old CLA comments before posting new one
+              await deleteOldClaComments();
 
               // Post CLA comment
               const commentBody = `Hello @${author}! 👋\n\nThank you for your contribution. Since this is your first time contributing to this repository, we ask that you sign our Contributor Licence Agreement (CLA).\n\n📄 [You can read the CLA here](https://github.com/MetOffice/simulation-systems/blob/github_wps/Momentum-CLA.md).\n\nTo agree to the CLA, please add your details (**GitHub username**, real name, organisation, email, and date) to the _CONTRIBUTORS_ file (create one, if required) in the development branch for this PR. After signing the CLA, you won't need to do this again for future PRs.`;
