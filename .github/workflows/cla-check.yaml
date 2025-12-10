@@ -1,4 +1,9 @@
-name: CLA
+# ------------------------------------------------------------------------------
+#  (c) Crown copyright Met Office. All rights reserved.
+#  The file LICENCE, distributed with this code, contains details of the terms
+#  under which the code may be used.
+# ------------------------------------------------------------------------------
+name: CLA Checker
 on:
   workflow_call:
     inputs:
@@ -18,12 +23,12 @@ jobs:
     steps:
       # --- Step 1: Check Base Branch ---
       - name: Checkout base branch and check for contributor status
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.ref }}
 
-      - name: Determine if contributor exists in base
+      - name: Determine if contributor exists in base (new)
         id: check_contributor_base
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
@@ -43,28 +48,52 @@ jobs:
 
       # --- Step 2: Check PR Branch ---
       - name: Checkout PR branch and check for contributor status
-        # Only run if contributor wasn't found on the base branch
-        if: steps.check_contributor_base.outputs.on_base != 'true'
-        uses: actions/checkout@v5
+        # Always check PR branch to detect if contributor removed themselves
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Determine if contributor exists in PR branch
         id: check_contributor_pr
-        # Only run if contributor wasn't found on the base branch
-        if: steps.check_contributor_base.outputs.on_base != 'true'
+        # Always check PR branch to detect if contributor removed themselves
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
-          if grep -q "\|\s*$AUTHOR\s*\|" CONTRIBUTORS.md; then
-            echo "signed=true" >> $GITHUB_OUTPUT
-            echo "✅ $AUTHOR has updated their CLA signature in CONTRIBUTORS.md file."
+          if [ -f "CONTRIBUTORS.md" ]; then
+            if grep -qE "\|\s*$AUTHOR\s*\|" CONTRIBUTORS.md; then
+              echo "on_pr=true" >> $GITHUB_OUTPUT
+              echo "✅ $AUTHOR is in the CONTRIBUTORS.md file on PR branch."
+            else
+              echo "on_pr=false" >> $GITHUB_OUTPUT
+              echo "⚠️ $AUTHOR is not in the CONTRIBUTORS.md file on PR branch."
+            fi
           else
-            echo "signed=false" >> $GITHUB_OUTPUT
-            echo "❌ $AUTHOR has not signed the CLA."
+            echo "on_pr=undefined" >> $GITHUB_OUTPUT
+            echo "🔴 CONTRIBUTORS.md file does not exist on PR branch."
           fi
 
-      # --- Step 3: Manage PR Labels, Comments, and Final Status (Consolidated) ---
+      # -- Check if CONTRIBUTORS.md was modified in this PR
+      - name: Check if CONTRIBUTORS.md was modified in PR
+        id: check_contributors_modified
+        run: |
+          # Fetch the base branch
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+
+          # Use the base SHA directly for comparison (works with forks)
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
+
+          if echo "$CHANGED_FILES" | grep -q "^CONTRIBUTORS.md$"; then
+            echo "modified=true" >> $GITHUB_OUTPUT
+            echo "📝 CONTRIBUTORS.md file was modified in this PR."
+          else
+            echo "modified=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ CONTRIBUTORS.md file was NOT modified in this PR."
+          fi
+
+      # -- Step 3: Manage PR Labels, Comments, and Final Status (Consolidated)
       - name: Manage CLA Status, Labels, and Comments
         uses: actions/github-script@v8
         # Using 'always()' here so this step runs regardless of previous
@@ -74,13 +103,17 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const signedOnBase = '${{ steps.check_contributor_base.outputs.on_base }}' === 'true';
-            // Default signed status is false if the second check wasn't run
-            const signedOnPr = '${{ steps.check_contributor_pr.outputs.signed }}' === 'true';
-            const cla_met = signedOnBase || signedOnPr;
+            const signedOnPr = '${{ steps.check_contributor_pr.outputs.on_pr }}' === 'true';
+            const contributorsModified = '${{ steps.check_contributors_modified.outputs.modified }}' === 'true';
             const issue_number = context.issue.number;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const author = context.payload.pull_request.user.login;
+
+            // Check if contributor was on base but removed themselves from PR
+            const removedFromPr = signedOnBase && !signedOnPr && contributorsModified;
+            // CLA is met if: (1) signed on both base and PR, OR (2) signed on base and didn't modify CONTRIBUTORS.md
+            const cla_met = (signedOnBase && signedOnPr) || (signedOnBase && !contributorsModified);
 
             // Helper function to create or update a label with a specific color
             async function ensureLabel(name, color, description) {
@@ -89,8 +122,12 @@ jobs:
                 console.log(`Updated label: ${name} with color ${color}`);
               } catch (error) {
                 // If update fails (label doesn't exist), create it
-                await github.rest.issues.createLabel({ owner, repo, name, color, description });
-                console.log(`Created new label: ${name} with color ${color}`);
+                try {
+                  await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                  console.log(`Created new label: ${name} with color ${color}`);
+                } catch (createError) {
+                  console.log(`Error with label ${name}:`, createError.message);
+                }
               }
             }
 
@@ -98,20 +135,96 @@ jobs:
             const COLOR_SIGNED = '0052cc'; // Blue
             const COLOR_REQUIRED = 'b60205'; // Red
 
-            console.log(`CLA Met: ${cla_met} (Base: ${signedOnBase}, PR: ${signedOnPr})`);
+            // Helper function to delete old CLA-related comments from this bot
+            async function deleteOldClaComments() {
+              try {
+                const comments = await github.rest.issues.listComments({
+                  owner,
+                  repo,
+                  issue_number
+                });
+
+                // Filter comments from GitHub Actions bot that contain CLA-related content
+                // GitHub Actions bot username is 'github-actions[bot]'
+                const botComments = comments.data.filter(comment =>
+                  (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
+                  (comment.body.includes('CLA') ||
+                   comment.body.includes('CONTRIBUTORS') ||
+                   comment.body.includes('Contributor Licence Agreement'))
+                );
+
+                console.log(`Found ${botComments.length} old CLA comment(s) to delete`);
+
+                // Delete all old CLA comments
+                for (const comment of botComments) {
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: comment.id
+                  });
+                  console.log(`Deleted old CLA comment #${comment.id} from ${comment.user.login}`);
+                }
+              } catch (error) {
+                console.log('Error deleting old comments:', error.message);
+              }
+            }
+
+            console.log(`CLA Met: ${cla_met} (Base: ${signedOnBase}, PR: ${signedOnPr}, Modified: ${contributorsModified}, Removed: ${removedFromPr})`);
+
+            // Handle case where contributor removed themselves from CONTRIBUTORS file
+            if (removedFromPr) {
+              await ensureLabel('cla-required', COLOR_REQUIRED, 'CLA signature is required for this PR.');
+              console.log('⚠️ Contributor was in base branch but removed from PR branch.');
+
+              // Ensure labels are correct
+              await Promise.allSettled([
+                github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
+                github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-required'] })
+              ]);
+
+              // Delete old CLA comments before posting new one
+              await deleteOldClaComments();
+
+              // Post warning comment
+              const commentBody = `⚠️ Hello @${author}!\n\nYour CLA signature was found on the base branch, but you appear to have removed yourself from the _CONTRIBUTORS.md_ file in this PR.\n\nPlease ensure your entry remains in the _CONTRIBUTORS.md_ file. If you have already signed the CLA, you should not remove your details from the file.`;
+
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: commentBody });
+
+              // Fail the GitHub Action run
+              console.error("⚠️ Contributor removed themselves from CONTRIBUTORS file.");
+              process.exit(1);
+            }
 
             if (cla_met) {
               await ensureLabel('cla-signed', COLOR_SIGNED, 'This contributor has signed the CLA.');
-              console.log('✅ CLA condition met. Removing required label and adding signed label.');
+
+              // Different messages based on scenario
+              if (signedOnBase && !contributorsModified) {
+                console.log('✅ CLA already signed on base branch, and CONTRIBUTORS.md not modified in PR.');
+              } else {
+                console.log('✅ CLA condition met. Removing required label and adding signed label.');
+              }
+
               // Use Promise.allSettled for robust label management
               await Promise.allSettled([
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-required' }),
+                github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-signed'] })
               ]);
-              if ( signedOnBase === false ) {
-                await Promise.allSettled([
-                    github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-signed'] })
-                ]);
-              }
+
+              // Delete old CLA comments since CLA is satisfied
+              await deleteOldClaComments();
+
+            } else if (!signedOnBase && signedOnPr) {
+              // New contributor signing CLA for the first time
+              await ensureLabel('cla-signed', COLOR_SIGNED, 'This contributor has signed the CLA.');
+              console.log('✅ New contributor has signed the CLA in PR branch.');
+              await Promise.allSettled([
+                github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-required' }),
+                github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-signed'] })
+              ]);
+
+              // Delete old CLA comments since CLA is now signed
+              await deleteOldClaComments();
 
             } else {
               await ensureLabel('cla-required', COLOR_REQUIRED, 'CLA signature is required for this PR.');
@@ -122,6 +235,9 @@ jobs:
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-required'] })
               ]);
+
+              // Delete old CLA comments before posting new one
+              await deleteOldClaComments();
 
               // Post CLA comment
               const commentBody = `Hello @${author}! 👋\n\nThank you for your contribution. Since this is your first time contributing to this repository, we ask that you sign our Contributor Licence Agreement (CLA).\n\n📄 [You can read the CLA here](https://github.com/MetOffice/Momentum/blob/main/CLA.md).\n\nTo agree to the CLA, please add your details (**GitHub username**, Real Name, Affiliation, and Date) to the _CONTRIBUTORS.md_ file (create one, if required) in the development branch for this PR. After signing the CLA, you won't need to do this again for future PRs.`;
