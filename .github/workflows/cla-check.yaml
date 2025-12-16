@@ -53,7 +53,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Determine if contributor exists in PR branch
         id: check_contributor_pr
@@ -81,10 +80,9 @@ jobs:
           git fetch origin ${{ github.event.pull_request.base.ref }}
 
           # Use the base SHA directly for comparison (works with forks)
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
-          CHANGED_FILES=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
+          CHANGED_FILES=$(git diff --name-only $HEAD_SHA)
 
           if echo "$CHANGED_FILES" | grep -q "^CONTRIBUTORS.md$"; then
             echo "modified=true" >> $GITHUB_OUTPUT
