@@ -67,8 +67,8 @@ jobs:
       - name: Determine if contributor exists in PR branch
         id: check_contributor_pr
         # Always check PR branch to detect if contributor removed themselves
+        working-directory: ${GITHUB_WORKSPACE}/clean_pr_branch
         run: |
-          cd $GITHUB_WORKSPACE/clean_pr_branch
           AUTHOR="${{ github.event.pull_request.user.login }}"
           if [ -f "CONTRIBUTORS.md" ]; then
             if grep -qE "\|\s*$AUTHOR\s*\|" CONTRIBUTORS.md; then
@@ -86,9 +86,8 @@ jobs:
       # -- Check if CONTRIBUTORS.md was modified in this PR
       - name: Check if CONTRIBUTORS.md was modified in PR
         id: check_contributors_modified
+        working-directory: ${GITHUB_WORKSPACE}/merged_branch
         run: |
-          cd $GITHUB_WORKSPACE/clean_pr_branch
-
           # Fetch the base branch
           git fetch origin ${{ github.event.pull_request.base.ref }}
 
