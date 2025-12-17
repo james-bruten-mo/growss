@@ -47,16 +47,27 @@ jobs:
             echo "🔴 CONTRIBUTORS.md file does not exist on base. Proceeding to check PR branch."
           fi
 
-      # --- Step 2: Check PR Branch ---
+      # --- Step 2: Check PR Branch - not merged ---
+      # Use to determine if developer has added themselves in the PR
       - name: Checkout PR branch and check for contributor status
-        # Always check PR branch to detect if contributor removed themselves
         uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: clean_pr_branch
+
+      # --- Check Merged PR Branch
+      # Use to determine if developer has altered the PR
+      - name: Checkout PR branch and check for contributor status
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: merged_branch
 
       - name: Determine if contributor exists in PR branch
         id: check_contributor_pr
         # Always check PR branch to detect if contributor removed themselves
+        working-directory: ${GITHUB_WORKSPACE}/clean_pr_branch
         run: |
           AUTHOR="${{ github.event.pull_request.user.login }}"
           if [ -f "CONTRIBUTORS.md" ]; then
@@ -75,6 +86,7 @@ jobs:
       # -- Check if CONTRIBUTORS.md was modified in this PR
       - name: Check if CONTRIBUTORS.md was modified in PR
         id: check_contributors_modified
+        working-directory: ${GITHUB_WORKSPACE}/merged_branch
         run: |
           # Fetch the base branch
           git fetch origin ${{ github.event.pull_request.base.ref }}
