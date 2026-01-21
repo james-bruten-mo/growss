@@ -220,6 +220,7 @@ jobs:
               // Ensure labels are correct
               await Promise.allSettled([
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
+                github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-required' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-modified'] })
               ]);
 
@@ -259,6 +260,7 @@ jobs:
               console.log('✅ New contributor has signed the CLA in PR branch.');
               await Promise.allSettled([
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-required' }),
+                github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-modified' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-signed'] })
               ]);
 
@@ -272,6 +274,7 @@ jobs:
               // Ensure labels are correct
               await Promise.allSettled([
                 github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-signed' }),
+                github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'cla-modified' }),
                 github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['cla-required'] })
               ]);
 
