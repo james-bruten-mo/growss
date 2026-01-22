@@ -74,9 +74,11 @@ jobs:
           pr_num=$(jq -r '.pr_num' context.json)
           pr_id=$(jq -r '.pr_id' context.json)
           echo "PR_NUM=$pr_num" >> $GITHUB_ENV
-          echo "PR_ID=$pr_id" >> $GITHUB_ENV
+          unzip -q context.zip
+          jq -r '"PR_NUM=\(.pr_num)\nPR_ID=\(.pr_id)"' context.json >> $GITHUB_ENV
 
       - name: Assign Author if no assignees
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -147,13 +149,14 @@ jobs:
 
       - name: Request SciTech review, if needed
         if: env.SR_REQUEST_REQUIRED == 'true' && env.REQUIRED_STATE == 'SciTech Review' && env.SCITECH_REVIEWER != ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr edit -R "$REPO" "$PR_NUM" --add-reviewer "$SCITECH_REVIEWER"
+        run: gh pr edit -R "$REPO" "$PR_NUM" --add-reviewer "$SCITECH_REVIEWER"
 
       - name: Request code review, if needed
         if: env.CR_REQUEST_REQUIRED == 'true' && env.REQUIRED_STATE == 'Code Review' && env.CODE_REVIEWER != ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
