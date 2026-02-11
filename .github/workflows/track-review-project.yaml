@@ -100,6 +100,16 @@ jobs:
           echo "SCITECH_REVIEWER=$scitech_reviewer" >> $GITHUB_ENV
           echo "CODE_REVIEWER=$code_reviewer" >> $GITHUB_ENV
 
+          # If the PR isn't OPEN then required project state is "Done"
+          # This marks the PR as Done whether it has been merged or not
+          # Draft PRs have an OPEN state
+          state=$(echo "$pr_data" | jq -r '.state')
+          if [[ "$state" != "OPEN" ]]; then
+            required_state="Done"
+            echo "REQUIRED_STATE=$required_state" >> $GITHUB_ENV
+            exit 0
+          fi
+
           # Determine review state
           reviews=$(echo "$pr_data" | jq -c '{reviews, reviewRequests}')
           sr_requested=$(echo "$reviews" | jq --arg sr "$scitech_reviewer" '[.reviewRequests[] | select(.login == $sr)] | length')
