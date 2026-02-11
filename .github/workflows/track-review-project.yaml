@@ -104,7 +104,7 @@ jobs:
           # This marks the PR as Done whether it has been merged or not
           # Draft PRs have an OPEN state
           state=$(echo "$pr_data" | jq -r '.state')
-          if [[ "$state" != "CLOSED" ]]; then
+          if [[ "$state" != "OPEN" ]]; then
             required_state="Done"
             echo "REQUIRED_STATE=$required_state" >> $GITHUB_ENV
             exit 0
