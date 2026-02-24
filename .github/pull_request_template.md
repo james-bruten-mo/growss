@@ -27,4 +27,4 @@ Code Reviewer: <!-- CR id, filled by SSD -->
 
 # Code Review
 
-- [ ] The modified documentation has been changed to a sufficient standard
+- [ ] The changes are approriate and testing has been sufficient
