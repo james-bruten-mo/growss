@@ -13,7 +13,7 @@ Code Reviewer: <!-- CR id, filled by SSD -->
 
 - [ ] I have performed a self-review of my own code
 - [ ] My code follows the project's style guidelines
-- [ ] The modified workflows README has been updated if required
+- [ ] The modified workflow's README has been updated, if required
 - [ ] The changes have been sufficiently tested (please describe)
 
 ## AI Assistance and Attribution
